@@ -104,4 +104,3 @@ sudo sed -i "s/EC2/OpenShift Virt/g" /var/www/html/index.html
 exit
 curl -s https://$ROUTE_URL
 ```
-*Now it says "Hello from RHEL 10 on OpenShift Virt" - Migration complete! 🎉* 
