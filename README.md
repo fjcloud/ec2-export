@@ -8,7 +8,7 @@ This Terraform configuration sets up the complete infrastructure for exporting E
 - DataSync locations and task
 - IAM roles and policies
 - EC2 instance for export (with automatic RHEL 10 AMI detection)
-- Security groups and networking
+- Security groups for EFS and EC2 (HTTP/SSH access from anywhere)
 - **Automatic region-specific canonical user ID selection** for S3 bucket policy
 
 ## Usage:
@@ -43,13 +43,20 @@ This Terraform configuration sets up the complete infrastructure for exporting E
    terraform output efs_mount_command
    ```
 
-6. **Verify selected RHEL 10 AMI (optional):**
+6. **Test the EC2 instance web server:**
+   ```bash
+   terraform output curl_test_command
+   # Copy and run the curl command to test the web server
+   # Should return: <h1>Hello from RHEL 10 on EC2</h1>
+   ```
+
+7. **Verify selected RHEL 10 AMI (optional):**
    ```bash
    terraform output rhel10_ami_id
    terraform output rhel10_ami_name
    ```
 
-7. **Verify canonical user ID (optional):**
+8. **Verify canonical user ID (optional):**
    ```bash
    terraform output canonical_user_id
    ```

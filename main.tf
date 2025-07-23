@@ -164,6 +164,39 @@ resource "aws_security_group" "efs" {
   }
 }
 
+# Security Group for EC2 Instance
+resource "aws_security_group" "ec2_web" {
+  name_prefix = "ec2-web-${var.cluster_name}-"
+  vpc_id      = data.aws_vpc.selected.id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "HTTP from anywhere"
+  }
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "SSH from anywhere"
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "ec2-web-${var.cluster_name}"
+  }
+}
+
 # EFS File System
 resource "aws_efs_file_system" "export" {
   creation_token = "ec2-export-${var.cluster_name}"
@@ -321,10 +354,11 @@ resource "aws_key_pair" "export_key" {
 
 # EC2 Instance for Export
 resource "aws_instance" "export_instance" {
-  ami           = data.aws_ami.rhel10.id
-  instance_type = "t3.micro"
-  key_name      = aws_key_pair.export_key.key_name
-  subnet_id     = var.subnet_id
+  ami                    = data.aws_ami.rhel10.id
+  instance_type          = "t3.micro"
+  key_name               = aws_key_pair.export_key.key_name
+  subnet_id              = var.subnet_id
+  vpc_security_group_ids = [aws_security_group.ec2_web.id]
 
   associate_public_ip_address = true
 
@@ -359,4 +393,19 @@ output "datasync_execution_command" {
 output "datasync_task_arn" {
   description = "DataSync task ARN"
   value       = aws_datasync_task.s3_to_efs.arn
+}
+
+output "ec2_public_ip" {
+  description = "Public IP address of the EC2 instance"
+  value = aws_instance.export_instance.public_ip
+}
+
+output "ec2_public_dns" {
+  description = "Public DNS name of the EC2 instance"
+  value = aws_instance.export_instance.public_dns
+}
+
+output "curl_test_command" {
+  description = "Curl command to test the web server"
+  value = "curl -s http://${aws_instance.export_instance.public_dns}"
 }
