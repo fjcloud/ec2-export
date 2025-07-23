@@ -105,7 +105,7 @@ curl -s https://$ROUTE_URL
 
 ### 14. One More Thing...
 ```bash
-virtctl ssh fedora@$VM_NAME -n ec2-vm
+virtctl ssh ec2-user@$VM_NAME -n ec2-vm
 sudo sed -i "s/EC2/OpenShift Virt/g" /var/www/html/index.html
 exit
 curl -s https://$ROUTE_URL
