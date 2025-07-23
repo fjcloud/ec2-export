@@ -119,6 +119,9 @@ curl -s https://$ROUTE_URL
 # Get bucket name from terraform (if it exists)
 BUCKET_NAME=$(terraform output -raw s3_bucket_name)
 
+# Empty bucket
+aws s3 rm s3://$BUCKET_NAME --recursive --region $AWS_REGION
+
 # Destroy Terraform infrastructure
 terraform destroy
 ```
