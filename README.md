@@ -2,6 +2,12 @@
 
 **Objective:** Migrate an EC2 instance to OpenShift Virtualization by exporting it to S3, syncing to EFS, and importing as a VM.
 
+## Set Environment Variables
+```bash
+export CLUSTER_NAME="your-cluster-name"
+export AWS_REGION="your-aws-region"
+```
+
 ## Prerequisites:
 - ROSA cluster running
 - AWS CLI configured
@@ -29,7 +35,7 @@ oc apply -k yaml/custom-resources/
 
 ### 4. Deploy Infrastructure
 ```bash
-terraform apply -var="aws_region=eu-west-3" -var="cluster_name=fja-hcp"
+terraform apply -var="aws_region=$AWS_REGION" -var="cluster_name=$CLUSTER_NAME"
 ```
 
 ### 5. Test EC2 Instance
@@ -37,10 +43,13 @@ terraform apply -var="aws_region=eu-west-3" -var="cluster_name=fja-hcp"
 $(terraform output -raw curl_test_command)
 ```
 
-### 6. Export EC2 to S3
+### 6. Export EC2 to S3 ☕
 ```bash
 $(terraform output -raw ec2_export_command)
+# Check export status
+aws ec2 describe-export-tasks --region $AWS_REGION
 ```
+*Could take 15min ☕*
 
 ### 7. Start DataSync Task (when export is done)
 ```bash
