@@ -66,7 +66,7 @@ $(terraform output -raw datasync_execution_command)
 1. Navigate to **Migration → Providers for virtualization**
 2. Click **Create Provider**
 3. Select **Open Virtual Appliance (OVA)**
-4. Enter provider name and EFS NFS URL: `$(terraform output -raw efs_dns_name)` and path :/ova
+4. Enter provider name and EFS NFS URL: `$(terraform output -raw efs_dns_name)` and path `:/ova`
 5. Click **Create**
 *(Provider should be created in openshift-mtv namespace)*
 
