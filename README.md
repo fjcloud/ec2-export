@@ -9,7 +9,7 @@ export AWS_REGION="your-aws-region"
 ```
 
 ## Prerequisites:
-- ROSA cluster running
+- ROSA 4.19.x cluster running
 - AWS CLI configured
 - SSH public key at `~/.ssh/id_rsa.pub`
 - Terraform installed
