@@ -1,89 +1,51 @@
-# EC2 Export to EFS via DataSync - Terraform
+# EC2 to OpenShift Virtualization Migration Tutorial
 
-This Terraform configuration sets up the complete infrastructure for exporting EC2 instances to EFS via AWS DataSync.
-
-## What it creates:
-- S3 bucket (with random name) for EC2 export
-- EFS file system for storage
-- DataSync locations and task
-- IAM roles and policies
-- EC2 instance for export (with automatic RHEL 10 AMI detection)
-- Security groups for EFS and EC2 (HTTP/SSH access from anywhere)
-- **Automatic region-specific canonical user ID selection** for S3 bucket policy
-
-## Usage:
-
-1. **Configure variables:**
-   ```bash
-   cp terraform.tfvars.example terraform.tfvars
-   # Edit terraform.tfvars with your values
-   ```
-
-2. **Deploy infrastructure:**
-   ```bash
-   terraform init
-   terraform plan
-   terraform apply
-   ```
-
-3. **Run EC2 export:**
-   ```bash
-   # Use the command from terraform output
-   terraform output ec2_export_command
-   ```
-
-4. **Start DataSync transfer:**
-   ```bash
-   # Use the command from terraform output  
-   terraform output datasync_execution_command
-   ```
-
-5. **Get EFS mount URL for Forklift:**
-   ```bash
-   terraform output efs_mount_command
-   ```
-
-6. **Test the EC2 instance web server:**
-   ```bash
-   terraform output curl_test_command
-   # Copy and run the curl command to test the web server
-   # Should return: <h1>Hello from RHEL 10 on EC2</h1>
-   ```
-
-7. **Verify selected RHEL 10 AMI (optional):**
-   ```bash
-   terraform output rhel10_ami_id
-   terraform output rhel10_ami_name
-   ```
-
-8. **Verify canonical user ID (optional):**
-   ```bash
-   terraform output canonical_user_id
-   ```
-
-## Required Variables:
-- `aws_region`: AWS region to deploy resources
-- `subnet_id`: Subnet ID for EFS mount target and EC2 instance
-- `cluster_name`: Name prefix for resources (optional, defaults to "hcp")
-
-## Features:
-
-### Automatic Canonical User ID Selection
-The configuration automatically selects the correct AWS canonical user ID based on your region. This is required for EC2 VM export to S3. The mapping includes:
-
-- Special regions (GovCloud, new regions like Jakarta, Malaysia, etc.)
-- Falls back to the default canonical user ID for standard regions
-- No manual configuration needed - just specify your region
-
-### Automatic RHEL 10 AMI Detection
-The configuration automatically finds the latest RHEL 10 AMI for your specified region:
-
-- Searches for the most recent RHEL 10 AMI in the target region
-- Uses Red Hat's official AWS account (309956199498)
-- Filters for x86_64 architecture and HVM virtualization
-- No need to hardcode region-specific AMI IDs
+**Objective:** Migrate an EC2 instance to OpenShift Virtualization by exporting it to S3, syncing to EFS, and importing as a VM.
 
 ## Prerequisites:
+- ROSA cluster running
 - AWS CLI configured
 - SSH public key at `~/.ssh/id_rsa.pub`
-- Terraform installed 
+- Terraform installed
+- oc CLI connected to cluster
+
+## Tutorial
+
+### 1. Deploy Operators
+```bash
+oc apply -k yaml/operators/
+```
+
+### 2. Verify CRDs
+```bash
+oc get crd hyperconvergeds.hco.kubevirt.io
+oc get crd forkliftcontrollers.forklift.konveyor.io
+```
+
+### 3. Deploy Custom Resources
+```bash
+oc apply -k yaml/custom-resources/
+```
+
+### 4. Deploy Infrastructure
+```bash
+terraform apply -var="aws_region=eu-west-3" -var="cluster_name=fja-hcp"
+```
+
+### 5. Test EC2 Instance
+```bash
+$(terraform output -raw curl_test_command)
+```
+
+### 6. Export EC2 to S3
+```bash
+$(terraform output -raw ec2_export_command)
+```
+
+### 7. Start DataSync Task (when export is done)
+```bash
+$(terraform output -raw datasync_execution_command)
+```
+
+### 8. Start Migration in OpenShift Console
+Navigate to Migration → Virtualization in the OpenShift console to complete the migration. 

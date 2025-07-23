@@ -21,10 +21,7 @@ variable "aws_region" {
   type        = string
 }
 
-variable "subnet_id" {
-  description = "Subnet ID for resources"
-  type        = string
-}
+
 
 variable "cluster_name" {
   description = "Cluster name for naming resources"
@@ -35,12 +32,24 @@ variable "cluster_name" {
 # Data sources
 data "aws_caller_identity" "current" {}
 
-data "aws_subnet" "selected" {
-  id = var.subnet_id
+# Find public subnet in AZ 'a' for the ROSA cluster
+data "aws_subnet" "public" {
+  filter {
+    name   = "tag:Cluster"
+    values = [var.cluster_name]
+  }
+  filter {
+    name   = "tag:kubernetes.io/role/elb"
+    values = [""]
+  }
+  filter {
+    name   = "availability-zone"
+    values = ["${var.aws_region}a"]
+  }
 }
 
 data "aws_vpc" "selected" {
-  id = data.aws_subnet.selected.vpc_id
+  id = data.aws_subnet.public.vpc_id
 }
 
 # Region-specific canonical user IDs for VM Export
@@ -199,17 +208,17 @@ resource "aws_security_group" "ec2_web" {
 
 # EFS File System
 resource "aws_efs_file_system" "export" {
-  creation_token = "ec2-export-${var.cluster_name}"
+  creation_token = "ec2-export-${var.cluster_name}-${random_id.bucket_suffix.hex}"
   
   tags = {
-    Name = "ec2-export-${var.cluster_name}"
+    Name = "ec2-export-${var.cluster_name}-${random_id.bucket_suffix.hex}"
   }
 }
 
 # EFS Mount Target
 resource "aws_efs_mount_target" "export" {
   file_system_id  = aws_efs_file_system.export.id
-  subnet_id       = var.subnet_id
+  subnet_id       = data.aws_subnet.public.id
   security_groups = [aws_security_group.efs.id]
 }
 
@@ -321,7 +330,7 @@ resource "aws_datasync_location_efs" "export" {
 
   ec2_config {
     security_group_arns = [aws_security_group.efs.arn]
-    subnet_arn         = "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:subnet/${var.subnet_id}"
+    subnet_arn         = "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:subnet/${data.aws_subnet.public.id}"
   }
 
   depends_on = [aws_efs_mount_target.export]
@@ -357,7 +366,7 @@ resource "aws_instance" "export_instance" {
   ami                    = data.aws_ami.rhel10.id
   instance_type          = "t3.micro"
   key_name               = aws_key_pair.export_key.key_name
-  subnet_id              = var.subnet_id
+  subnet_id              = data.aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.ec2_web.id]
 
   associate_public_ip_address = true
@@ -381,31 +390,21 @@ EOF
 # Outputs
 
 output "ec2_export_command" {
-  description = "Command to run EC2 export task"
+  description = "CLI to export EC2"
   value = "aws ec2 create-instance-export-task --instance-id ${aws_instance.export_instance.id} --target-environment vmware --export-to-s3-task DiskImageFormat=VMDK,ContainerFormat=ova,S3Bucket=${aws_s3_bucket.ec2_export.bucket},S3Prefix=ova/ --region ${var.aws_region}"
 }
 
 output "datasync_execution_command" {
-  description = "Command to start DataSync task execution"
+  description = "CLI to run DataSync task"
   value = "aws datasync start-task-execution --task-arn ${aws_datasync_task.s3_to_efs.arn} --region ${var.aws_region}"
 }
 
-output "datasync_task_arn" {
-  description = "DataSync task ARN"
-  value       = aws_datasync_task.s3_to_efs.arn
-}
-
-output "ec2_public_ip" {
-  description = "Public IP address of the EC2 instance"
-  value = aws_instance.export_instance.public_ip
-}
-
-output "ec2_public_dns" {
-  description = "Public DNS name of the EC2 instance"
-  value = aws_instance.export_instance.public_dns
-}
-
 output "curl_test_command" {
-  description = "Curl command to test the web server"
+  description = "CLI to test webserver"
   value = "curl -s http://${aws_instance.export_instance.public_dns}"
+}
+
+output "efs_dns_name" {
+  description = "DNS name of EFS"
+  value = aws_efs_file_system.export.dns_name
 }

@@ -2,5 +2,4 @@
 # Copy this to terraform.tfvars and fill in your values
 
 aws_region   = "eu-west-3"
-subnet_id    = "subnet-075b8974fdac3186c"
 cluster_name = "fja-hcp" 
