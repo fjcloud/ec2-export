@@ -130,6 +130,24 @@ EOF
 ```
 
 ```shell
+EFS=$(aws efs create-file-system --creation-token efs-token-1 \
+   --region ${AWS_REGION} \
+   --encrypted | jq -r '.FileSystemId')
+echo $EFS
+for SUBNET in $(aws ec2 describe-subnets \
+  --filters Name=vpc-id,Values=$VPC Name='tag:kubernetes.io/role/internal-elb',Values='*' \
+  --query 'Subnets[*].{SubnetId:SubnetId}' \
+  --region $AWS_REGION \
+  | jq -r '.[].SubnetId'); do \
+    MOUNT_TARGET=$(aws efs create-mount-target --file-system-id $EFS \
+       --subnet-id $SUBNET --security-groups $SG \
+       --region $AWS_REGION \
+       | jq -r '.MountTargetId'); \
+    echo $MOUNT_TARGET; \
+ done
+```
+
+```shell
 # Set your bucket name
 BUCKET_NAME="ec2-export-$CLUSTER_NAME"
 
