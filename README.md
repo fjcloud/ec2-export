@@ -47,5 +47,52 @@ $(terraform output -raw ec2_export_command)
 $(terraform output -raw datasync_execution_command)
 ```
 
-### 8. Start Migration in OpenShift Console
-Navigate to Migration → Virtualization in the OpenShift console to complete the migration. 
+### 8. Create OVA Provider in OpenShift Console
+1. Navigate to **Migration → Providers for virtualization**
+2. Click **Create Provider**
+3. Select **Open Virtual Appliance (OVA)**
+4. Enter provider name and EFS NFS URL: `$(terraform output -raw efs_dns_name):/ova`
+5. Click **Create**
+*(Provider should be created in openshift-mtv namespace)*
+
+### 9. Create Migration Plan
+1. Create destination namespace: `oc new-project ec2-vm`
+2. Navigate to **Migration → Plans for virtualization**
+3. Click **Create Plan**
+4. Select your OVA provider as source
+5. Select VMs to migrate
+6. Create network and storage mappings
+7. Select ec2-vm as target namespace
+8. Click **Create migration plan**
+*(Migration should be created in openshift-mtv namespace)*
+
+### 10. Start Migration and VM
+1. Click **Start** on your migration plan
+2. Wait for migration to complete
+3. Navigate to **Virtualization → Virtual Machines**
+4. Select ec2-vm namespace
+5. Your migrated VM will appear - click to start it
+*(VM will be created in ec2-vm namespace)*
+
+### 11. Expose VM via Service and Route
+```bash
+VM_NAME=$(oc get vm -n ec2-vm -o jsonpath='{.items[0].metadata.name}')
+oc create service clusterip vm-service --tcp=80:80 -n ec2-vm
+oc patch service vm-service -n ec2-vm -p '{"spec":{"selector":{"app":"'$VM_NAME'"}}}'
+oc create route edge vm-route --service=vm-service -n ec2-vm
+```
+
+### 12. Test VM via Route
+```bash
+ROUTE_URL=$(oc get route vm-route -n ec2-vm -o jsonpath='{.spec.host}')
+curl -s https://$ROUTE_URL
+```
+
+### 13. One More Thing...
+```bash
+virtctl ssh fedora@$VM_NAME -n ec2-vm
+sudo sed -i "s/EC2/OpenShift Virt/g" /var/www/html/index.html
+exit
+curl -s https://$ROUTE_URL
+```
+*Now it says "Hello from RHEL 10 on OpenShift Virt" - Migration complete! 🎉* 
