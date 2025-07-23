@@ -110,3 +110,20 @@ sudo sed -i "s/EC2/OpenShift Virt/g" /var/www/html/index.html
 exit
 curl -s https://$ROUTE_URL
 ```
+*Now it says "Hello from RHEL 10 on OpenShift Virt" - Migration complete! 🎉*
+
+## Cleanup
+
+### Remove S3 Bucket and AWS Resources
+```bash
+# Get bucket name from terraform (if it exists)
+BUCKET_NAME=$(terraform output -raw s3_bucket_name)
+
+# Destroy Terraform infrastructure
+terraform destroy
+```
+
+### Remove Bare Metal Machine Pool
+```bash
+rosa delete machine-pool bm -c $CLUSTER_NAME --yes
+```

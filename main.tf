@@ -408,3 +408,8 @@ output "efs_dns_name" {
   description = "DNS name of EFS"
   value = aws_efs_file_system.export.dns_name
 }
+
+output "s3_bucket_name" {
+  description = "S3 bucket name for EC2 export"
+  value = aws_s3_bucket.ec2_export.bucket
+}
