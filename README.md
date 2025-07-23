@@ -49,7 +49,7 @@ terraform apply -var="aws_region=$AWS_REGION" -var="cluster_name=$CLUSTER_NAME"
 $(terraform output -raw curl_test_command)
 ```
 
-### 7. Export EC2 to S3 ☕
+### 7. Export EC2 to OVA and store it to S3
 ```bash
 $(terraform output -raw ec2_export_command)
 # Check export status
