@@ -14,7 +14,6 @@ export EC2_OS="rhel10"  # Options: rhel10, ubuntu
 - **ubuntu**: Ubuntu 24.04 LTS Server
 
 **Note**: All instances use t3.micro and are configured for **SSH key authentication only** - password authentication is disabled for security.
-```
 
 ## Prerequisites:
 - ROSA 4.19.x cluster running
