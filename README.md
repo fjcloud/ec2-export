@@ -6,12 +6,20 @@
 ```bash
 export CLUSTER_NAME="your-cluster-name"
 export AWS_REGION="your-aws-region"
+export EC2_OS="rhel10"  # Options: rhel10, ubuntu
+```
+
+### OS Options:
+- **rhel10**: Red Hat Enterprise Linux 10 (default)
+- **ubuntu**: Ubuntu 24.04 LTS Server
+
+**Note**: All instances use t3.micro and are configured for **SSH key authentication only** - password authentication is disabled for security.
 ```
 
 ## Prerequisites:
 - ROSA 4.19.x cluster running
 - AWS CLI configured
-- SSH public key at `~/.ssh/id_rsa.pub`
+- SSH public key at `~/.ssh/id_rsa.pub` (**REQUIRED** - password auth disabled)
 - Terraform installed
 - oc CLI connected to cluster
 - virtctl
@@ -28,7 +36,7 @@ rosa create machine-pool -c $CLUSTER_NAME --name bm --replicas=1 --instance-type
 oc apply -k yaml/operators/
 ```
 
-### 3. Verify CRDs
+### 3. Wait for CRDs
 ```bash
 oc get crd hyperconvergeds.hco.kubevirt.io
 oc get crd forkliftcontrollers.forklift.konveyor.io
@@ -41,7 +49,7 @@ oc apply -k yaml/custom-resources/
 
 ### 5. Deploy Infrastructure
 ```bash
-terraform apply -var="aws_region=$AWS_REGION" -var="cluster_name=$CLUSTER_NAME"
+terraform apply -var="aws_region=$AWS_REGION" -var="cluster_name=$CLUSTER_NAME" -var="ec2_os=$EC2_OS"
 ```
 
 ### 6. Test EC2 Instance
@@ -52,8 +60,10 @@ $(terraform output -raw curl_test_command)
 ### 7. Export EC2 to OVA and store it to S3
 ```bash
 $(terraform output -raw ec2_export_command)
-# Check export status
-aws ec2 describe-export-tasks --region $AWS_REGION
+# Show status of task
+aws ec2 describe-export-tasks --region $AWS_REGION | jq .ExportTasks[0].State
+# Wait for export completed
+aws ec2 wait export-task-completed --region $AWS_REGION
 ```
 *Could take 15min ☕*
 
@@ -66,7 +76,7 @@ $(terraform output -raw datasync_execution_command)
 1. Navigate to **Migration → Providers for virtualization**
 2. Click **Create Provider**
 3. Select **Open Virtual Appliance (OVA)**
-4. Enter provider name and EFS NFS URL: `$(terraform output -raw efs_dns_name)` and path `:/ova`
+4. Enter provider name and EFS NFS URL: `terraform output -raw efs_dns_name` and path `:/ova`
 5. Click **Create**
 *(Provider should be created in openshift-mtv namespace)*
 
@@ -105,8 +115,16 @@ curl -s https://$ROUTE_URL
 
 ### 14. One More Thing...
 ```bash
-virtctl ssh ec2-user@$VM_NAME -n ec2-vm
+# SSH user depends on OS: 
+# - ec2-user (RHEL)
+# - ubuntu (Ubuntu)
+# 
+# Note: SSH key authentication only - use your private key
+virtctl ssh ec2-user@$VM_NAME -n ec2-vm  # Adjust username based on your OS
+
+# Modify the web page content
 sudo sed -i "s/EC2/OpenShift Virt/g" /var/www/html/index.html
+
 exit
 curl -s https://$ROUTE_URL
 ```
@@ -123,7 +141,7 @@ BUCKET_NAME=$(terraform output -raw s3_bucket_name)
 aws s3 rm s3://$BUCKET_NAME --recursive --region $AWS_REGION
 
 # Destroy Terraform infrastructure
-terraform destroy
+terraform destroy -var="aws_region=$AWS_REGION" -var="cluster_name=$CLUSTER_NAME" -var="ec2_os=$EC2_OS"
 ```
 
 ### Remove Bare Metal Machine Pool

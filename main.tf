@@ -29,6 +29,16 @@ variable "cluster_name" {
   default     = "hcp"
 }
 
+variable "ec2_os" {
+  description = "Operating system for EC2 instance"
+  type        = string
+  default     = "rhel10"
+  validation {
+    condition = contains(["rhel10", "ubuntu"], var.ec2_os)
+    error_message = "Supported OS types: rhel10, ubuntu"
+  }
+}
+
 # Data sources
 data "aws_caller_identity" "current" {}
 
@@ -80,7 +90,7 @@ locals {
   canonical_user_id = lookup(local.canonical_user_ids, var.aws_region, "c4d8eabf8db69dbe46bfe0e517100c554f01200b104d59cd408e777ba442a322")
 }
 
-# Find the latest RHEL 10 AMI for the current region
+# AMI lookups for different OS types
 data "aws_ami" "rhel10" {
   most_recent = true
   owners      = ["309956199498"] # Red Hat's AWS account ID
@@ -103,6 +113,82 @@ data "aws_ami" "rhel10" {
   filter {
     name   = "state"
     values = ["available"]
+  }
+}
+
+data "aws_ami" "ubuntu" {
+  most_recent = true
+  owners      = ["099720109477"] # Canonical
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+
+  filter {
+    name   = "state"
+    values = ["available"]
+  }
+}
+
+
+
+
+
+# Local values for AMI selection and user data
+locals {
+  ami_map = {
+    rhel10 = data.aws_ami.rhel10.id
+    ubuntu = data.aws_ami.ubuntu.id
+  }
+
+  user_data_map = {
+    rhel10 = <<-EOF
+#!/bin/bash
+# Update packages
+yum update -y
+
+# Install and configure Apache
+yum install -y httpd
+systemctl start httpd
+systemctl enable httpd
+
+# Create web content
+echo "<h1>Hello from RHEL 10 on EC2</h1>" > /var/www/html/index.html
+
+# Ensure Apache is running
+systemctl restart httpd
+systemctl status httpd
+EOF
+
+    ubuntu = <<-EOF
+#!/bin/bash
+# Update packages
+apt update -y
+
+# Install and configure Apache
+apt install -y apache2
+systemctl start apache2
+systemctl enable apache2
+
+# Create web content with proper permissions
+echo "<h1>Hello from Ubuntu 24.04 on EC2</h1>" > /var/www/html/index.html
+chown www-data:www-data /var/www/html/index.html
+chmod 644 /var/www/html/index.html
+
+# Ensure Apache is running
+systemctl restart apache2
+systemctl status apache2
+EOF
+
+
+
+
   }
 }
 
@@ -363,7 +449,7 @@ resource "aws_key_pair" "export_key" {
 
 # EC2 Instance for Export
 resource "aws_instance" "export_instance" {
-  ami                    = data.aws_ami.rhel10.id
+  ami                    = local.ami_map[var.ec2_os]
   instance_type          = "t3.micro"
   key_name               = aws_key_pair.export_key.key_name
   subnet_id              = data.aws_subnet.public.id
@@ -371,16 +457,7 @@ resource "aws_instance" "export_instance" {
 
   associate_public_ip_address = true
 
-  user_data = base64encode(<<-EOF
-#!/bin/bash
-yum update -y
-yum install -y httpd
-systemctl start httpd
-systemctl enable httpd
-echo "<h1>Hello from RHEL 10 on EC2</h1>" > /var/www/html/index.html
-systemctl status httpd
-EOF
-  )
+  user_data = base64encode(local.user_data_map[var.ec2_os])
 
   tags = {
     Name = "export-instance-${var.cluster_name}"
@@ -412,4 +489,9 @@ output "efs_dns_name" {
 output "s3_bucket_name" {
   description = "S3 bucket name for EC2 export"
   value = aws_s3_bucket.ec2_export.bucket
+}
+
+output "ec2_os_selected" {
+  description = "Operating system deployed on EC2 instance"
+  value = var.ec2_os
 }
