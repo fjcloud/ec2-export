@@ -42,16 +42,41 @@ variable "ec2_os" {
 # Data sources
 data "aws_caller_identity" "current" {}
 
-# Find ELB with specific labels to get its subnet
+# Find ELB with specific labels to get its subnet (for EC2 export instance)
 data "aws_lb" "reference_elb" {
   tags = {
     "api.openshift.com/name" = var.cluster_name
   }
 }
 
-# Get subnet from the reference ELB
+# Get public subnet from the reference ELB (for EC2 export instance)
 data "aws_subnet" "public" {
   id = tolist(data.aws_lb.reference_elb.subnets)[0]
+}
+
+# Find ROSA worker EC2 instances to get their private subnet (for EFS mount target)
+data "aws_instances" "rosa_workers" {
+  filter {
+    name   = "tag:api.openshift.com/name"
+    values = [var.cluster_name]
+  }
+  filter {
+    name   = "instance-state-name"
+    values = ["running"]
+  }
+  filter {
+    name   = "tag:Name"
+    values = ["*worker*"]
+  }
+}
+
+# Get private subnet from the first ROSA worker node
+data "aws_instance" "rosa_worker" {
+  instance_id = data.aws_instances.rosa_workers.ids[0]
+}
+
+data "aws_subnet" "private" {
+  id = data.aws_instance.rosa_worker.subnet_id
 }
 
 data "aws_vpc" "selected" {
@@ -297,10 +322,10 @@ resource "aws_efs_file_system" "export" {
   }
 }
 
-# EFS Mount Target
+# EFS Mount Target (in private subnet where ROSA workers are)
 resource "aws_efs_mount_target" "export" {
   file_system_id  = aws_efs_file_system.export.id
-  subnet_id       = data.aws_subnet.public.id
+  subnet_id       = data.aws_subnet.private.id
   security_groups = [aws_security_group.efs.id]
 }
 
@@ -412,7 +437,7 @@ resource "aws_datasync_location_efs" "export" {
 
   ec2_config {
     security_group_arns = [aws_security_group.efs.arn]
-    subnet_arn         = "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:subnet/${data.aws_subnet.public.id}"
+    subnet_arn         = "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:subnet/${data.aws_subnet.private.id}"
   }
 
   depends_on = [aws_efs_mount_target.export]
