@@ -42,20 +42,16 @@ variable "ec2_os" {
 # Data sources
 data "aws_caller_identity" "current" {}
 
-# Find public subnet in AZ 'a' for the ROSA cluster
+# Find ELB with specific labels to get its subnet
+data "aws_lb" "reference_elb" {
+  tags = {
+    "api.openshift.com/name" = var.cluster_name
+  }
+}
+
+# Get subnet from the reference ELB
 data "aws_subnet" "public" {
-  filter {
-    name   = "tag:Cluster"
-    values = [var.cluster_name]
-  }
-  filter {
-    name   = "tag:kubernetes.io/role/elb"
-    values = [""]
-  }
-  filter {
-    name   = "availability-zone"
-    values = ["${var.aws_region}a"]
-  }
+  id = tolist(data.aws_lb.reference_elb.subnets)[0]
 }
 
 data "aws_vpc" "selected" {
